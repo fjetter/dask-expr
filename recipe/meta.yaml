@@ -1,5 +1,5 @@
 {% set name = "dask-expr" %}
-{% set version = "0.1.6" %}
+{% set version = "0.1.7" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: c7df66fe16cb69d07331113dd72e821a857223ff069fdd78da9eabb1cf2ef21d
+  sha256: 5864caac8d6756d2e2a93381d155817bedc00e4f8a2b712a462fe605412547ec
 
 build:
   noarch: python
