@@ -1316,25 +1316,27 @@ class GroupByCumulativeFinalizer(Expr, GroupByBase):
         return self.frame.divisions
 
     def _layer(self) -> dict:
-        dsk = {(self._name, 0): (self.cum_raw._name, 0)}
+        dsk = {(self._name, 0): self.cum_raw.__dask_keys__()[0]}
         name_cum = "cum-last" + self._name
-
-        for i in range(1, self.frame.npartitions):
+        cum_last_keys = self.cum_last.__dask_keys__()
+        for i, frame_key in enumerate(self.frame.__dask_keys__()):
+            if i == 0:
+                continue
             # store each cumulative step to graph to reduce computation
             if i == 1:
-                dsk[(name_cum, i)] = (self.cum_last._name, i - 1)
+                dsk[(name_cum, i)] = cum_last_keys[i - 1]
             else:
                 # aggregate with previous cumulation results
                 dsk[(name_cum, i)] = (
                     _cum_agg_filled,
                     (name_cum, i - 1),
-                    (self.cum_last._name, i - 1),
+                    cum_last_keys[i - 1],
                     self.aggregate,
                     self.initial,
                 )
             dsk[(self._name, i)] = (
                 _cum_agg_aligned,
-                (self.frame._name, i),
+                frame_key,
                 (name_cum, i),
                 self.by,
                 self.operand("columns"),

@@ -76,23 +76,25 @@ class CumulativeFinalize(Expr):
     def _layer(self) -> dict:
         dsk = {}
         frame, previous_partitions = self.frame, self.previous_partitions
-        dsk[(self._name, 0)] = (frame._name, 0)
+        frame_keys = frame.__dask_keys__()
+        previous_partitions_keys = previous_partitions.__dask_keys__()
+        dsk[(self._name, 0)] = frame_keys[0]
 
         intermediate_name = self._name + "-intermediate"
         for i in range(1, self.frame.npartitions):
             if i == 1:
-                dsk[(intermediate_name, i)] = (previous_partitions._name, i - 1)
+                dsk[(intermediate_name, i)] = previous_partitions_keys[i - 1]
             else:
                 # aggregate with previous cumulation results
                 dsk[(intermediate_name, i)] = (
                     methods._cum_aggregate_apply,
                     self.aggregator,
                     (intermediate_name, i - 1),
-                    (previous_partitions._name, i - 1),
+                    previous_partitions_keys[i - 1],
                 )
             dsk[(self._name, i)] = (
                 self.aggregator,
-                (self.frame._name, i),
+                frame_keys[i],
                 (intermediate_name, i),
             )
         return dsk

@@ -159,10 +159,11 @@ class RepartitionToFewer(Repartition):
 
     def _layer(self):
         new_partitions_boundaries = self._partitions_boundaries
+        frame_keys = self.frame.__dask_keys__()
         return {
             (self._name, i): (
                 _concat,
-                [(self.frame._name, j) for j in range(start, end)],
+                [frame_keys[j] for j in range(start, end)],
             )
             for i, (start, end) in enumerate(
                 zip(new_partitions_boundaries, new_partitions_boundaries[1:])
@@ -195,12 +196,13 @@ class RepartitionToMore(Repartition):
         new_name = self._name
         split_name = f"split-{new_name}"
         j = 0
+        frame_keys = df.__dask_keys__()
         for i, k in enumerate(nsplits):
             if k == 1:
-                dsk[new_name, j] = (df._name, i)
+                dsk[new_name, j] = frame_keys[i]
                 j += 1
             else:
-                dsk[split_name, i] = (split_evenly, (df._name, i), k)
+                dsk[split_name, i] = (split_evenly, frame_keys[i], k)
                 for jj in range(k):
                     dsk[new_name, j] = (getitem, (split_name, i), jj)
                     j += 1
@@ -425,12 +427,13 @@ class RepartitionSize(Repartition):
             split_name = f"split-{tokenize(df, self._nsplits)}"
             new_name = f"repartition-split-{self._size}-{tokenize(df)}"
             j = 0
+            frame_keys = df.__dask_keys__()
             for i, k in enumerate(self._nsplits):
                 if k == 1:
-                    dsk[new_name, j] = (df._name, i)
+                    dsk[new_name, j] = frame_keys[i]
                     j += 1
                 else:
-                    dsk[split_name, i] = (split_evenly, (df._name, i), k)
+                    dsk[split_name, i] = (split_evenly, frame_keys[i], k)
                     for jj in range(k):
                         dsk[new_name, j] = (getitem, (split_name, i), jj)
                         j += 1

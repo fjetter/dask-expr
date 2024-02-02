@@ -271,7 +271,7 @@ class StackPartition(Concat):
     _defaults = {"join": "outer", "ignore_order": False, "_kwargs": {}, "axis": 0}
 
     def _layer(self):
-        dsk, i = {}, 0
+        dsk = {}
         kwargs = self._kwargs.copy()
         kwargs["ignore_order"] = self.ignore_order
         ctr = 0
@@ -282,16 +282,15 @@ class StackPartition(Concat):
                 match = True
             except (ValueError, TypeError):
                 match = False
-
-            for i in range(df.npartitions):
+            for key in df.__dask_keys__():
                 if match:
-                    dsk[(self._name, ctr)] = df._name, i
+                    dsk[(self._name, ctr)] = key
                 else:
                     dsk[(self._name, ctr)] = (
                         apply,
                         methods.concat,
                         [
-                            [meta, (df._name, i)],
+                            [meta, key],
                             self.axis,
                             self.join,
                             False,
@@ -321,7 +320,7 @@ class StackPartitionInterleaved(StackPartition):
                 apply,
                 methods.concat,
                 [
-                    [(df._name, i) for df in dfs],
+                    [df.__dask_keys__()[i] for df in dfs],
                     self.axis,
                     self.join,
                     False,

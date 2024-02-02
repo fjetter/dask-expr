@@ -127,7 +127,7 @@ class ToParquetData(Blockwise):
         return (None,) * (self.frame.npartitions + 1)
 
     def _task(self, index: int):
-        return (self.io_func, (self.frame._name, index), (index,))
+        return (self.io_func, self.frame.__dask_keys__()[index], (index,))
 
 
 class ToParquetBarrier(Expr):

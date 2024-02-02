@@ -334,6 +334,7 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
                 _concat_list,
                 self.ignore_index,
             )
+            frame_keys = self.frame.__dask_keys__()
             for _, _part_out, _part_in in _concat_list:
                 dsk[(split_name, _part_out, _part_in)] = (
                     operator.getitem,
@@ -343,7 +344,7 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
                 if (shuffle_group_name, _part_in) not in dsk:
                     dsk[(shuffle_group_name, _part_in)] = (
                         self._shuffle_group,
-                        (self.frame._name, _part_in),
+                        frame_keys,
                         _filter,
                         self.partitioning_index,
                         0,
@@ -551,11 +552,11 @@ class P2PShuffle(SimpleShuffle):
         parts_out = (
             self._partitions if self._filtered else list(range(self.npartitions_out))
         )
-        for i in range(self.frame.npartitions):
+        for i, key in enumerate(self.frame.__dask_keys__()):
             transfer_keys.append((name, i))
             dsk[(name, i)] = (
                 shuffle_transfer,
-                (self.frame._name, i),
+                key,
                 token,
                 i,
                 self.npartitions_out,

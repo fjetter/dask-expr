@@ -51,13 +51,11 @@ class FromGraph(IO):
             self.operand("name_prefix") + "-" + _tokenize_deterministic(*self.operands)
         )
 
+    def __dask_keys__(self):
+        return self.operand("keys")
+
     def _layer(self):
-        dsk = dict(self.operand("layer"))
-        # The name may not actually match the layers name therefore rewrite this
-        # using an alias
-        for part, k in enumerate(self.operand("keys")):
-            dsk[(self._name, part)] = k
-        return dsk
+        return dict(self.operand("layer"))
 
 
 class BlockwiseIO(Blockwise, IO):
@@ -486,7 +484,7 @@ class FromScalars(IO):
         return {
             (self._name, 0): (
                 type(self.meta),
-                [(s._name, 0) for s in self._scalars],
+                [s.__dask_keys__()[0] for s in self._scalars],
                 self.names,
                 None,
                 self.meta.name,

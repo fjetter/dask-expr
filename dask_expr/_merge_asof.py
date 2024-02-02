@@ -281,8 +281,8 @@ def prefix_reduction(f, ddf, identity, name, **kwargs):
     N = 1
     while N < n:
         N *= 2
-    for i in range(n):
-        dsk[(name, i, 1, 0)] = (apply, f, [(ddf._name, i), identity], kwargs)
+    for i, key in enumerate(ddf.__dask_keys__()):
+        dsk[(name, i, 1, 0)] = (apply, f, [key, identity], kwargs)
     for i in range(n, N):
         dsk[(name, i, 1, 0)] = identity
 
@@ -364,8 +364,9 @@ def suffix_reduction(f, ddf, identity, name, **kwargs):
     N = 1
     while N < n:
         N *= 2
+    ddf_keys = ddf.__dask_keys__()
     for i in range(n):
-        dsk[(name, i, 1, 0)] = (apply, f, [(ddf._name, n - 1 - i), identity], kwargs)
+        dsk[(name, i, 1, 0)] = (apply, f, [ddf_keys[n - 1 - i], identity], kwargs)
     for i in range(n, N):
         dsk[(name, i, 1, 0)] = identity
 

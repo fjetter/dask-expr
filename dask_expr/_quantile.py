@@ -85,10 +85,10 @@ class SeriesQuantileTdigest(SeriesQuantile):
         from dask.array.percentile import _percentiles_from_tdigest, _tdigest_chunk
 
         dsk = {}
-        for i in range(self.frame.npartitions):
+        for i, key in enumerate(self.frame.__dask_keys__()):
             dsk[("chunk-" + self._name, i)] = (
                 _tdigest_chunk,
-                (getattr, (self.frame._name, i), "values"),
+                (getattr, key, "values"),
             )
 
         dsk[(self._name, 0)] = self._finalizer(
@@ -110,10 +110,10 @@ class SeriesQuantileDask(SeriesQuantile):
         calc_qs = np.pad(self.q * 100, 1, mode="constant")
         calc_qs[-1] = 100
 
-        for i in range(self.frame.npartitions):
+        for i, key in enumerate(self.frame.__dask_keys__()):
             dsk[("chunk-" + self._name, i)] = (
                 _percentile,
-                (self.frame._name, i),
+                key,
                 calc_qs,
             )
         dsk[(self._name, 0)] = self._finalizer(

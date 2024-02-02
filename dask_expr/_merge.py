@@ -476,11 +476,11 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         transfer_keys_left = list()
         transfer_keys_right = list()
         func = create_assign_index_merge_transfer()
-        for i in range(self.left.npartitions):
+        for i, key in enumerate(self.left.__dask_keys__()):
             transfer_keys_left.append((transfer_name_left, i))
             dsk[(transfer_name_left, i)] = (
                 func,
-                (self.left._name, i),
+                key,
                 self.shuffle_left_on,
                 _HASH_COLUMN_NAME,
                 self.npartitions,
@@ -490,11 +490,11 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self._partitions,
                 self.left_index,
             )
-        for i in range(self.right.npartitions):
+        for i, key in enumerate(self.right.__dask_keys__()):
             transfer_keys_right.append((transfer_name_right, i))
             dsk[(transfer_name_right, i)] = (
                 func,
-                (self.right._name, i),
+                key,
                 self.shuffle_right_on,
                 _HASH_COLUMN_NAME,
                 self.npartitions,

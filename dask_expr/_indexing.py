@@ -190,7 +190,7 @@ class LocElement(LocBase):
         return {
             (self._name, 0): (
                 methods.loc,
-                (self.frame._name, part),
+                self.frame.__dask_keys__()[part],
                 slice(self.iindexer, self.iindexer),
                 self.cindexer,
             )
@@ -208,7 +208,7 @@ class LocList(LocBase):
             for i, (div, indexer) in enumerate(items):
                 dsk[self._name, i] = (
                     methods.loc,
-                    (self.frame._name, div),
+                    self.frame.__dask_keys__()[div],
                     indexer,
                     self.cindexer,
                 )
@@ -289,11 +289,12 @@ class LocSlice(LocBase):
         )
 
     def _layer(self) -> dict:
+        frame_keys = self.frame.__dask_keys__()
         if self.stop == self.start:
             return {
                 (self._name, 0): (
                     methods.loc,
-                    (self.frame._name, self.start),
+                    frame_keys[self.start],
                     slice(self.iindexer.start, self.iindexer.stop),
                     self.cindexer,
                 )
@@ -302,25 +303,25 @@ class LocSlice(LocBase):
         dsk = {
             (self._name, 0): (
                 methods.loc,
-                (self.frame._name, self.start),
+                frame_keys[self.start],
                 slice(self.iindexer.start, None),
                 self.cindexer,
             )
         }
         for i in range(1, self.stop - self.start):
             if self.cindexer is None:
-                dsk[self._name, i] = (self.frame._name, self.start + i)
+                dsk[self._name, i] = frame_keys[self.start + i]
             else:
                 dsk[self._name, i] = (
                     methods.loc,
-                    (self.frame._name, self.start + i),
+                    frame_keys[self.start + i],
                     slice(None, None),
                     self.cindexer,
                 )
 
         dsk[self._name, self.stop - self.start] = (
             methods.loc,
-            (self.frame._name, self.stop),
+            frame_keys[self.stop],
             slice(None, self.iindexer.stop),
             self.cindexer,
         )

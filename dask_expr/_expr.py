@@ -517,9 +517,9 @@ class Blockwise(Expr):
         if isinstance(arg, Expr):
             # Make key for Expr-based argument
             if self._broadcast_dep(arg):
-                return (arg._name, 0)
+                return arg.__dask_keys__()[0]
             else:
-                return (arg._name, i)
+                return arg.__dask_keys__()[i]
 
         else:
             return arg
@@ -636,11 +636,15 @@ def _get_meta_ufunc(dfs, args, func):
         raise NotImplementedError(msg)
     # For broadcastable series, use no rows.
     parts = [
-        d._meta
-        if d.ndim == 0
-        else np.empty((), dtype=d.dtype)
-        if isinstance(d, Array)
-        else meta_nonempty(d._meta)
+        (
+            d._meta
+            if d.ndim == 0
+            else (
+                np.empty((), dtype=d.dtype)
+                if isinstance(d, Array)
+                else meta_nonempty(d._meta)
+            )
+        )
         for d in dasks
     ]
 
@@ -895,12 +899,13 @@ class CreateOverlappingPartitions(Expr):
         dsk, prevs, nexts = {}, [], []
 
         name_prepend = "overlap-prepend" + self.frame._name
+        frame_keys = self.frame.__dask_keys__()
         if self.before:
             prevs.append(None)
             if isinstance(self.before, numbers.Integral):
                 before = self.before
                 for i in range(self.frame.npartitions - 1):
-                    dsk[(name_prepend, i)] = (M.tail, (self.frame._name, i), before)
+                    dsk[(name_prepend, i)] = (M.tail, frame_keys[i], before)
                     prevs.append((name_prepend, i))
             elif isinstance(self.before, datetime.timedelta):
                 # Assumes monotonic (increasing?) index
@@ -928,8 +933,8 @@ class CreateOverlappingPartitions(Expr):
 
                         dsk[(name_prepend, i)] = (
                             _tail_timedelta,
-                            (self.frame._name, i + 1),
-                            [(self.frame._name, k) for k in range(j, i + 1)],
+                            frame_keys[i + 1],
+                            [frame_keys[k] for k in range(j, i + 1)],
                             self.before,
                         )
                         prevs.append((name_prepend, i))
@@ -937,8 +942,8 @@ class CreateOverlappingPartitions(Expr):
                     for i in range(self.frame.npartitions - 1):
                         dsk[(name_prepend, i)] = (
                             _tail_timedelta,
-                            (self.frame._name, i + 1),
-                            [(self.frame._name, i)],
+                            frame_keys[i + 1],
+                            [frame_keys[i]],
                             self.before,
                         )
                         prevs.append((name_prepend, i))
@@ -950,7 +955,7 @@ class CreateOverlappingPartitions(Expr):
             if isinstance(self.after, numbers.Integral):
                 after = self.after
                 for i in range(1, self.frame.npartitions):
-                    dsk[(name_append, i)] = (M.head, (self.frame._name, i), after)
+                    dsk[(name_append, i)] = (M.head, frame_keys[i], after)
                     nexts.append((name_append, i))
             else:
                 # We don't want to look at the divisions, so take twice the step and
@@ -959,8 +964,8 @@ class CreateOverlappingPartitions(Expr):
                 for i in range(1, self.frame.npartitions):
                     dsk[(name_append, i)] = (
                         _head_timedelta,
-                        (self.frame._name, i - 1),
-                        (self.frame._name, i),
+                        frame_keys[i - 1],
+                        frame_keys[i],
                         after,
                     )
                     nexts.append((name_append, i))
@@ -974,7 +979,7 @@ class CreateOverlappingPartitions(Expr):
             dsk[(self._name, i)] = (
                 _combined_parts,
                 prev,
-                (self.frame._name, i),
+                frame_keys[i],
                 next,
                 self.before,
                 self.after,
@@ -1605,7 +1610,7 @@ class Apply(Elemwise):
             apply,
             M.apply,
             [
-                (self.frame._name, index),
+                self.frame.__dask_keys__()[index],
                 self.function,
             ]
             + list(self.args),
@@ -1825,9 +1830,11 @@ class CaseWhen(Elemwise):
         caselist = [
             (
                 meta_nonempty(c[i]._meta) if isinstance(c[i], Expr) else c[i],
-                meta_nonempty(c[i + 1]._meta)
-                if isinstance(c[i + 1], Expr)
-                else c[i + 1],
+                (
+                    meta_nonempty(c[i + 1]._meta)
+                    if isinstance(c[i + 1], Expr)
+                    else c[i + 1]
+                ),
             )
             for i in range(0, len(c), 2)
         ]
@@ -1939,7 +1946,7 @@ class Index(Elemwise):
     def _task(self, index: int):
         return (
             getattr,
-            (self.frame._name, index),
+            self.frame.__dask_keys__()[index],
             "index",
         )
 
@@ -1981,15 +1988,13 @@ class ResolveOverlappingDivisions(Expr):
     def _layer(self):
         non_empties = [i for i, length in enumerate(self.lens) if length != 0]
         # If all empty, collapse into one partition
+        frame_keys = self.frame.__dask_keys__()
         if len(non_empties) == 0:
-            return {(self._name, 0): (self.frame._name, 0)}
+            return {(self._name, 0): frame_keys[0]}
 
         # drop empty partitions by mapping each partition in a new graph to a particular
         # partition on the old graph.
-        dsk = {
-            (self._name, i): (self.frame._name, div)
-            for i, div in enumerate(non_empties)
-        }
+        dsk = {(self._name, i): frame_keys[div] for i, div in enumerate(non_empties)}
         ddf_keys = list(dsk.values())
 
         overlap = [
@@ -2044,9 +2049,9 @@ class Lengths(Expr):
 
     def _layer(self):
         name = "part-" + self._name
+
         dsk = {
-            (name, i): (len, (self.frame._name, i))
-            for i in range(self.frame.npartitions)
+            (name, i): (len, key) for i, key in enumerate(self.frame.__dask_keys__())
         }
         dsk[(self._name, 0)] = (tuple, list(dsk.keys()))
         return dsk
@@ -2226,12 +2231,12 @@ class BlockwiseHead(Head, Blockwise):
             op = safe_head
         else:
             op = M.head
-        return (op, (self.frame._name, index), self.n)
+        return (op, self.frame.__dask_keys__()[index], self.n)
 
 
 class BlockwiseHeadIndex(BlockwiseHead):
     def _task(self, index: int):
-        return (operator.getitem, (self.frame._name, index), slice(0, self.n))
+        return (operator.getitem, self.frame.__dask_keys__()[index], slice(0, self.n))
 
 
 class Tail(Expr):
@@ -2289,12 +2294,16 @@ class BlockwiseTail(Tail, Blockwise):
         return self.frame.divisions
 
     def _task(self, index: int):
-        return (M.tail, (self.frame._name, index), self.n)
+        return (M.tail, self.frame.__dask_keys__()[index], self.n)
 
 
 class BlockwiseTailIndex(BlockwiseTail):
     def _task(self, index: int):
-        return (operator.getitem, (self.frame._name, index), slice(-self.n, None))
+        return (
+            operator.getitem,
+            self.frame.__dask_keys__()[index],
+            slice(-self.n, None),
+        )
 
 
 class Binop(Elemwise):
@@ -2582,16 +2591,18 @@ class Partitions(Expr):
         return tuple(divisions)
 
     def _task(self, index: int):
-        return (self.frame._name, self.partitions[index])
+        return self.frame.__dask_keys__()[self.partitions[index]]
 
     def _simplify_down(self):
         if isinstance(self.frame, Blockwise) and not isinstance(
             self.frame, (BlockwiseIO, Fused)
         ):
             operands = [
-                Partitions(op, self.partitions)
-                if (isinstance(op, Expr) and not self.frame._broadcast_dep(op))
-                else op
+                (
+                    Partitions(op, self.partitions)
+                    if (isinstance(op, Expr) and not self.frame._broadcast_dep(op))
+                    else op
+                )
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
@@ -3130,8 +3141,9 @@ class Fused(Blockwise):
         return dep.npartitions == 1
 
     def _task(self, index):
-        graph = {self._name: (self.exprs[0]._name, index)}
+        graph = {self._name: self.exprs[0].__dask_keys__()[index]}
         for _expr in self.exprs:
+            frame_keys = _expr.__dask_keys__()
             if isinstance(_expr, Fused):
                 subgraph, name = _expr._task(index)[1:3]
                 graph.update(subgraph)
@@ -3139,9 +3151,9 @@ class Fused(Blockwise):
             elif self._broadcast_dep(_expr):
                 # When _expr is being broadcasted, we only
                 # want to define a fused task for index 0
-                graph[(_expr._name, 0)] = _expr._task(0)
+                graph[frame_keys[0]] = _expr._task(0)
             else:
-                graph[(_expr._name, index)] = _expr._task(index)
+                graph[frame_keys[index]] = _expr._task(index)
 
         for i, dep in enumerate(self.dependencies()):
             graph[self._blockwise_arg(dep, index)] = "_" + str(i)
@@ -3247,9 +3259,11 @@ def maybe_align_partitions(*exprs, divisions):
     from dask_expr._repartition import Repartition
 
     return [
-        Repartition(df, new_divisions=divisions, force=True)
-        if isinstance(df, Expr) and df.ndim > 0
-        else df
+        (
+            Repartition(df, new_divisions=divisions, force=True)
+            if isinstance(df, Expr) and df.ndim > 0
+            else df
+        )
         for df in exprs
     ]
 
