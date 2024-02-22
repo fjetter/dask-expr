@@ -65,6 +65,15 @@ def _tokenize_fileinfo(fileinfo):
     )
 
 
+def configure_pa_threadpools():
+    pa.set_cpu_count(dask.config.get("pyarrow.cpu_count", default=pa.cpu_count()))
+    pa.set_io_thread_count(
+        dask.config.get("pyarrow.io_thread_count", default=pa.io_thread_count())
+    )
+
+
+configure_pa_threadpools()
+
 PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.int8(): pd.Int8Dtype(),
     pa.int16(): pd.Int16Dtype(),
@@ -759,19 +768,26 @@ class ReadParquetPyarrowFS(ReadParquet):
                 cache_options=pa.CacheOptions(
                     # hole_size_limit=parse_bytes("8 KiB"),
                     # range_size_limit=parse_bytes("32.00 MiB"),
-                    hole_size_limit=parse_bytes("4 MiB"),
-                    range_size_limit=parse_bytes("32.00 MiB"),
+                    hole_size_limit=dask.config.get(
+                        "pyarrow.buffer.hole_size_limit", default="4.00 MiB"
+                    ),
+                    range_size_limit=parse_bytes(
+                        dask.config.get(
+                            "pyarrow.buffer.range_size_limit", default="32.00 MiB"
+                        )
+                    ),
                     # I've seen this actually slowing us down, e.g. on TPCHQ14
-                    lazy=False,
-                    prefetch_limit=500,
+                    lazy=dask.config.get("pyarrow.buffer.lazy", default=False),
+                    prefetch_limit=dask.config.get(
+                        "pyarrow.buffer.prefetch_limit", default=100
+                    ),
                 ),
                 # thrift_string_size_limit=None,
                 # thrift_container_size_limit=None,
                 # decryption_config=None,
                 # page_checksum_verification=False,
             ),
-            # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
-            use_threads=True,
+            use_threads=dask.config.get("pyarrow.use_threads.to_table", default=False),
         )
         df = table.to_pandas(
             types_mapper=_determine_type_mapper(),
@@ -781,7 +797,7 @@ class ReadParquetPyarrowFS(ReadParquet):
             # integer_object_nulls=False,
             # date_as_object=True,
             # timestamp_as_object=False,
-            use_threads=False,
+            use_threads=dask.config.get("pyarrow.use_threads.to_pandas", default=False),
             # deduplicate_objects=True,
             # ignore_metadata=False,
             # safe=True,
