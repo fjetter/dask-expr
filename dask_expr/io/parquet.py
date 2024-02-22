@@ -768,8 +768,10 @@ class ReadParquetPyarrowFS(ReadParquet):
                 cache_options=pa.CacheOptions(
                     # hole_size_limit=parse_bytes("8 KiB"),
                     # range_size_limit=parse_bytes("32.00 MiB"),
-                    hole_size_limit=dask.config.get(
-                        "pyarrow.buffer.hole_size_limit", default="4.00 MiB"
+                    hole_size_limit=parse_bytes(
+                        dask.config.get(
+                            "pyarrow.buffer.hole_size_limit", default="4.00 MiB"
+                        )
                     ),
                     range_size_limit=parse_bytes(
                         dask.config.get(
