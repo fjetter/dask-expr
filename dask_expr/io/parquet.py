@@ -758,9 +758,13 @@ class ReadParquetPyarrowFS(ReadParquet):
             schema=schema,
             columns=columns,
             filter=filters,
-            # batch_size=131072,
-            # batch_readahead=16,
-            # fragment_readahead=4,
+            batch_size=dask.config.get("pyarrow.buffer.batch_size", default=131072),
+            batch_readahead=dask.config.get(
+                "pyarrow.buffer.batch_readahead", default=16
+            ),
+            fragment_readahead=dask.config.get(
+                "pyarrow.buffer.fragment_readahead", default=4
+            ),
             fragment_scan_options=pa.dataset.ParquetFragmentScanOptions(
                 # use_buffered_stream=False,
                 # buffer_size=8192,
