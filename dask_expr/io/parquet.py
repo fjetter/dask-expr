@@ -796,7 +796,9 @@ class ReadParquetPyarrowFS(ReadParquet):
             use_threads=dask.config.get("pyarrow.use_threads.to_table", default=False),
         )
         df = table.to_pandas(
-            types_mapper=_determine_type_mapper(),
+            types_mapper=_determine_type_mapper(
+                dtype_backend=dask.config.get("pyarrow.dtype_backend", default=None)
+            ),
             # categories=None,
             # strings_to_categorical=False,
             # zero_copy_only=False,
