@@ -166,7 +166,9 @@ class FusedParquetIO(FusedIO):
         )
 
     @staticmethod
-    def _load_multiple_files(frag_filters, columns, schema, index_name):
+    def _load_multiple_files(
+        frag_filters, columns, schema, index_name, arrow_to_pandas, dtype_backend
+    ):
         from dask_expr.io.parquet import ReadParquetPyarrowFS
 
         # Note: Ideally we'd build a pyarrow fragment that points to multiple
@@ -185,7 +187,9 @@ class FusedParquetIO(FusedIO):
             for frag, filter in frag_filters
         )
         table = pa.concat_tables(tables)
-        return ReadParquetPyarrowFS._table_to_pandas(table, index_name)
+        return ReadParquetPyarrowFS._table_to_pandas(
+            table, index_name, arrow_to_pandas, dtype_backend
+        )
 
     def _task(self, index: int):
         expr = self.operand("_expr")
@@ -193,17 +197,10 @@ class FusedParquetIO(FusedIO):
         fragments_filters = []
         assert bucket
         for i in bucket:
-            _, frag_to_table, index_name = expr._filtered_task(i)
+            _, frag_to_table, *args = expr._filtered_task(i)
             fragments_filters.append((frag_to_table[1], frag_to_table[2]))
-            columns = frag_to_table[3]
-            schema = frag_to_table[4]
-        return (
-            self._load_multiple_files,
-            fragments_filters,
-            columns,
-            schema,
-            index_name,
-        )
+            columns, schema = frag_to_table[3:]
+        return (self._load_multiple_files, fragments_filters, columns, schema, *args)
 
 
 class FromMap(PartitionsFiltered, BlockwiseIO):

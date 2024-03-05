@@ -691,6 +691,10 @@ class ReadParquetPyarrowFS(ReadParquet):
     def normalized_path(self):
         return _normalize_and_strip_protocol(self.path)
 
+    @property
+    def dtype_backend(self):
+        return self.kwargs.get("dtype_backend", no_default)
+
     @cached_property
     def fs(self):
         fs_input = self.operand("filesystem")
@@ -980,6 +984,8 @@ class ReadParquetPyarrowFS(ReadParquet):
                 schema,
             ),
             index_name,
+            self.arrow_to_pandas,
+            self.dtype_backend,
         )
 
     @staticmethod
