@@ -166,18 +166,22 @@ class FusedParquetIO(FusedIO):
         schema,
         *to_pandas_args,
     ):
+        import dask
+
         from dask_expr.io.parquet import ReadParquetPyarrowFS
 
-        tables = (
-            ReadParquetPyarrowFS._fragment_to_table(
+        tables = [
+            dask.delayed(ReadParquetPyarrowFS._fragment_to_table)(
                 frag,
                 filter,
                 columns,
                 schema,
             )
             for frag, filter in frag_filters
+        ]
+        table = pa.concat_tables(
+            dask.compute(tables, scheduler="threading")[0], promote_options="permissive"
         )
-        table = pa.concat_tables(tables, promote_options="permissive")
         return ReadParquetPyarrowFS._table_to_pandas(table, *to_pandas_args)
 
     def _task(self, index: int):
