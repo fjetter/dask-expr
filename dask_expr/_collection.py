@@ -283,9 +283,10 @@ _WARN_ANNOTATIONS = True
 #
 # Collection classes
 #
+from dask.typing import DaskCollection
 
 
-class FrameBase(DaskMethodsMixin):
+class FrameBase(DaskCollection):
     """Base class for Expr-backed Collections"""
 
     __dask_scheduler__ = staticmethod(
@@ -445,6 +446,12 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
+    def __dask_precompute__(self):
+        out = self
+        if not isinstance(out, Scalar):
+            out = out.repartition(npartitions=1)
+        return out
+
     def compute(self, fuse=True, **kwargs):
         """Compute this DataFrame.
 
@@ -468,9 +475,7 @@ Expr={expr}"""
         --------
         dask.compute
         """
-        out = self
-        if not isinstance(out, Scalar):
-            out = out.repartition(npartitions=1)
+        out = self.__dask_precompute__()
         out = out.optimize(fuse=fuse)
         return DaskMethodsMixin.compute(out, **kwargs)
 
@@ -548,10 +553,6 @@ Expr={expr}"""
         """
         return self.expr.pprint()
 
-    @property
-    def dask(self):
-        return self.__dask_graph__()
-
     def __dask_graph__(self):
         out = self.expr
         out = out.lower_completely()
@@ -587,10 +588,6 @@ Expr={expr}"""
             The optimized Dask Dataframe
         """
         return new_collection(self.expr.optimize(fuse=fuse))
-
-    @property
-    def dask(self):
-        return self.__dask_graph__()
 
     def __dask_postcompute__(self):
         state = new_collection(self.expr.lower_completely())

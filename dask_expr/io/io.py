@@ -6,6 +6,7 @@ import operator
 
 import numpy as np
 import pyarrow as pa
+from dask.base import collections_to_dsk
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
@@ -54,11 +55,17 @@ class FromGraph(IO):
         )
 
     def _layer(self):
-        dsk = dict(self.operand("layer"))
+        obj = self.operand("layer")
+        if isinstance(obj, dict):
+            dsk = obj.copy()
+        else:
+            dsk = collections_to_dsk([obj])
         # The name may not actually match the layers name therefore rewrite this
         # using an alias
         for part, k in enumerate(self.operand("keys")):
-            dsk[(self._name, part)] = k
+            new_key = (self._name, part)
+            if new_key not in dsk:
+                dsk[new_key] = k
         return dsk
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 import os
 import weakref
 from collections import defaultdict
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING, Literal
 import dask
 import pandas as pd
 import toolz
+from dask.core import ensure_materialization_allowed
 from dask.dataframe.core import is_dataframe_like, is_index_like, is_series_like
 from dask.utils import funcname, import_required, is_arraylike
 
@@ -450,10 +452,6 @@ class Expr:
     def _name(self):
         return self._funcname + "-" + _tokenize_deterministic(*self.operands)
 
-    @property
-    def _meta(self):
-        raise NotImplementedError()
-
     def __getattr__(self, key):
         try:
             return object.__getattribute__(self, key)
@@ -473,7 +471,11 @@ class Expr:
             if key in _parameters:
                 idx = _parameters.index(key)
                 return self.operands[idx]
-            if is_dataframe_like(self._meta) and key in self._meta.columns:
+            if (
+                inspect.getattr_static(self, "_meta", None) is not None
+                and is_dataframe_like(self._meta)
+                and key in self._meta.columns
+            ):
                 return self[key]
 
             link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
@@ -483,8 +485,12 @@ class Expr:
                 f"API function. Current API coverage is documented here: {link}."
             )
 
+    def __dask_annotations__(self) -> dict:
+        return {}
+
     def __dask_graph__(self):
         """Traverse expression tree, collect layers"""
+        ensure_materialization_allowed()
         stack = [self]
         seen = set()
         layers = []
@@ -763,3 +769,44 @@ def collect_dependents(expr) -> defaultdict:
             stack.append(dep)
             dependents[dep._name].append(weakref.ref(node))
     return dependents
+
+
+class Tuple(Expr):
+    _parameters = [
+        "expressions",
+    ]
+
+    def __dask_keys__(self) -> list:
+        return [inner.__dask_keys__() for inner in self.operand("expressions")]
+
+
+from functools import cached_property
+
+from dask.base import tokenize
+from dask.utils import ensure_dict
+
+
+class FromHLG(Expr):
+    _parameters = [
+        "hlg",
+        "keys",
+        "name_prefix",
+    ]
+
+    @cached_property
+    def _name(self):
+        return self.operand("name_prefix") + "-" + tokenize(*self.operands)
+
+    def _layer(self):
+        dsk = ensure_dict(self.operand("hlg"), copy=True)
+        # The name may not actually match the layers name therefore rewrite this
+        # using an alias
+        for part, k in enumerate(self.operand("keys")):
+            dsk[(self._name, part)] = k
+        return dsk
+
+    def __dask_keys__(self):
+        return self.operand("keys")
+
+    def optimize(self, *args, **kwargs):
+        return self
