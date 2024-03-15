@@ -1168,7 +1168,11 @@ class _SetIndexPost(Blockwise):
         "column_dtype",
         "key_kwargs",
         "user_divisions",
+        "_divisions_cache",
     ]
+    _defaults = {
+        "_divisions_cache": None,
+    }
     _is_length_preserving = True
 
     @property
@@ -1202,6 +1206,9 @@ class _SetIndexPost(Blockwise):
     def _divisions(self):
         if self.operand("user_divisions") is not None:
             return self._get_culled_divisions(self.operand("user_divisions"))
+
+        if rv := self.operand("_divisions_cache"):
+            return rv
         kwargs = self.key_kwargs
         key = (
             kwargs["other"],
@@ -1211,7 +1218,9 @@ class _SetIndexPost(Blockwise):
             kwargs["upsample"],
         )
         assert key in divisions_lru
-        return self._get_culled_divisions(divisions_lru[key][0])
+        divisions = self._get_culled_divisions(divisions_lru[key][0])
+        self.operands[type(self)._parameters.index("_divisions_cache")] = divisions
+        return divisions
 
 
 class SortIndexBlockwise(Blockwise):

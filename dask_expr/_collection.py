@@ -45,6 +45,7 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.delayed import delayed
+from dask.typing import DaskCollection
 from dask.utils import (
     IndexCallable,
     M,
@@ -283,7 +284,6 @@ _WARN_ANNOTATIONS = True
 #
 # Collection classes
 #
-from dask.typing import DaskCollection
 
 
 class FrameBase(DaskCollection):
@@ -306,6 +306,9 @@ class FrameBase(DaskCollection):
     @property
     def expr(self) -> expr.Expr:
         return self._expr
+
+    def __dask_graph_factory__(self):
+        return self.expr
 
     @property
     def _meta(self):
