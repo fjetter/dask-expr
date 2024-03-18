@@ -292,10 +292,14 @@ def test_aggregate_rg_stats_to_file(tmpdir):
     ddf = read_parquet(fn, filesystem=filesystem)
     frag = ddf._expr.fragments[0]
     # Make sure this doesn't raise. We'll test the actual aggregation below
-    _aggregate_statistics_to_file([frag.metadata.to_dict()])
+    _aggregate_statistics_to_file([frag.fragment.metadata.to_dict()])
     # In reality, we'll strip the metadata down
     assert (
-        len(_aggregate_statistics_to_file([_extract_stats(frag.metadata.to_dict())]))
+        len(
+            _aggregate_statistics_to_file(
+                [_extract_stats(frag.fragment.metadata.to_dict())]
+            )
+        )
         > 0
     )
 

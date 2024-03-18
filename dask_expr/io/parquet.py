@@ -903,7 +903,9 @@ class ReadParquetPyarrowFS(ReadParquet):
                     filesystem=self.fs,
                 )
                 dataset_info["using_metadata_file"] = True
-                dataset_info["fragments"] = _frags = list(dataset.get_fragments())
+                dataset_info["fragments"] = _frags = [
+                    FragmentWrapper(frag) for frag in dataset.get_fragments()
+                ]
                 dataset_info["file_sizes"] = [None for fi in _frags]
 
         if checksum is None:
@@ -922,7 +924,9 @@ class ReadParquetPyarrowFS(ReadParquet):
                 filters=self.filters,
             )
             dataset_info["using_metadata_file"] = False
-            dataset_info["fragments"] = dataset.fragments
+            dataset_info["fragments"] = [
+                FragmentWrapper(frag) for frag in dataset.fragments
+            ]
             dataset_info["all_files"] = all_files
 
         dataset_info["dataset"] = dataset
@@ -997,7 +1001,12 @@ class ReadParquetPyarrowFS(ReadParquet):
             else:
                 ds = self._dataset_info["dataset"]._dataset
             return np.array(
-                list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
+                [
+                    FragmentWrapper(frag)
+                    for frag in ds.get_fragments(
+                        filter=pq.filters_to_expression(self.filters)
+                    )
+                ]
             )
         return np.array(self._dataset_info["fragments"])
 
@@ -1030,7 +1039,7 @@ class ReadParquetPyarrowFS(ReadParquet):
             ReadParquetPyarrowFS._table_to_pandas,
             (
                 ReadParquetPyarrowFS._fragment_to_table,
-                FragmentWrapper(self.fragments[index]),
+                self.fragments[index],
                 self.filters,
                 columns,
                 schema,
@@ -1044,10 +1053,7 @@ class ReadParquetPyarrowFS(ReadParquet):
     @staticmethod
     def _fragment_to_table(fragment_wrapper, filters, columns, schema):
         _maybe_adjust_cpu_count()
-        if isinstance(fragment_wrapper, FragmentWrapper):
-            fragment = fragment_wrapper.fragment
-        else:
-            fragment = fragment_wrapper
+        fragment = fragment_wrapper.fragment
         if isinstance(filters, list):
             filters = pq.filters_to_expression(filters)
         return fragment.to_table(
@@ -1827,7 +1833,9 @@ def _aggregate_statistics_to_file(stats):
 def _gather_statistics(frags):
     @dask.delayed
     def _collect_statistics(token_fragment):
-        return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
+        return token_fragment[0], _extract_stats(
+            token_fragment[1].fragment.metadata.to_dict()
+        )
 
     return dask.compute(
         list(_collect_statistics(frag) for frag in frags), scheduler="threading"
