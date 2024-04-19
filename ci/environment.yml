@@ -10,5 +10,5 @@ dependencies:
   - pandas>=2
   - pre-commit
   - pip:
-      - git+https://github.com/dask/distributed
-      - git+https://github.com/dask/dask
+    - git+https://github.com/fjetter/distributed@expr_to_scheduler_v2
+    - git+https://github.com/fjetter/dask@expr_to_scheduler_v2
