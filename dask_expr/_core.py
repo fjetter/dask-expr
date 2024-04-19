@@ -795,38 +795,3 @@ class Tuple(Expr):
     def __dask_graph__(self):
         """Traverse expression tree, collect layers"""
         return toolz.merge([expr.__dask_graph__() for expr in self.operands])
-
-
-# from functools import cached_property
-
-# from dask.base import tokenize
-# from dask.utils import ensure_dict
-
-
-# class FromHLG(Expr):
-#     _parameters = [
-#         "hlg",
-#         "keys",
-#         "name_prefix",
-#     ]
-
-#     @cached_property
-#     def _name(self):
-#         return self.operand("name_prefix") + "-" + tokenize(*self.operands)
-
-#     def _layer(self):
-#         dsk = ensure_dict(self.operand("hlg"), copy=True)
-#         # The name may not actually match the layers name therefore rewrite this
-#         # using an alias
-#         for part, k in enumerate(self.operand("keys")):
-#             dsk[(self._name, part)] = k
-#         return dsk
-
-#     def __dask_annotations__(self) -> dict:
-#         return self.hlg.__dask_annotations__()
-
-#     def __dask_keys__(self):
-#         return list(self.operand("keys"))
-
-#     def optimize(self, *args, **kwargs):
-#         return self
